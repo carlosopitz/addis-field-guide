@@ -103,6 +103,7 @@ header.top .links .btn{padding:6px 12px}
 .mapwrap .card[hidden]{display:none}
 .legend[hidden]{display:none}
 .xbtn{margin-left:auto;border:0;background:transparent;color:var(--muted);width:28px;height:28px;border-radius:50%;cursor:pointer;font-size:20px;line-height:1;display:grid;place-items:center;flex:none}
+a.tel{white-space:nowrap;text-decoration:underline;text-underline-offset:2px;text-decoration-thickness:1px}
 .xbtn:hover{background:var(--bg);color:var(--ink)}
 .leaflet-popup{position:absolute;text-align:left;margin-bottom:14px}
 .leaflet-popup-content-wrapper{background:var(--panel);color:var(--ink);border:1px solid var(--line);border-radius:14px;box-shadow:0 10px 32px rgba(23,32,42,.22);overflow:hidden}
@@ -647,6 +648,25 @@ header.top .links .btn{padding:6px 12px}
   var card = document.getElementById('card'), legendEl = document.getElementById('legend'), popup = null;
   var docked = window.matchMedia('(max-width:860px)');
   function kv(dt, dd, mono){ return dd ? '<dt>'+dt+'</dt><dd'+(mono?' class="mono"':'')+'>'+dd+'</dd>' : ''; }
+  // phone numbers become tap-to-call links; shortened endings ("/ 04") expand from the number before them,
+  // 3-4 digit Ethiopian short codes link as they are, and numbers with the wrong length stay plain text
+  function phoneHtml(s){
+    var prev = null, out = [];
+    String(s||'').split('/').forEach(function(raw){
+      var t = raw.trim(); if (!t) return;
+      var m = t.match(/^(.*?)(\s*(?:\(.*\)|ext\.?\s*\d.*))?$/i), main = (m ? m[1] : t).trim(), tail = (m && m[2]) || '';
+      var d = main.replace(/\D/g, ''), tel = null;
+      if (main.charAt(0) === '+') {
+        if ((d.indexOf('251') === 0 && d.length === 12) || (d.charAt(0) === '1' && d.length === 11)) { tel = '+' + d; prev = d; } else prev = null;
+      } else if (/^\d+$/.test(main.replace(/\s/g, ''))) {
+        if (d.length <= 3 && prev && d.length >= 2) tel = '+' + prev.slice(0, prev.length - d.length) + d;
+        else if (d.length === 4 && prev && prev.indexOf('2511') === 0) tel = '+' + prev.slice(0, prev.length - 4) + d;
+        else if (d.length === 4) tel = d;
+      }
+      out.push(tel ? '<a class="tel" href="tel:'+tel+'" title="Call '+tel+'">'+esc(main)+'</a>'+esc(tail) : esc(t));
+    });
+    return out.join(' / ');
+  }
   function copyBtn(text){ return '<button class="btn small" type="button" data-copy="'+esc(text)+'">Copy</button>'; }
   function cardHtml(p){
     var g = GK[p.g];
@@ -663,8 +683,8 @@ header.top .links .btn{padding:6px 12px}
       + kv('Where', esc(p.a))
       + kv('Hours', esc(p.h))
       + kv(C.daysLabel || 'Open days', esc(p.d))
-      + kv(C.phoneLabel || 'Phone', p.ph ? esc(p.ph)+' '+copyBtn(p.ph) : '', true)
-      + kv('Phone (Google)', p.gph ? esc(p.gph)+' '+copyBtn(p.gph) : '', true)
+      + kv(C.phoneLabel || 'Phone', p.ph ? phoneHtml(p.ph)+' '+copyBtn(p.ph) : '', true)
+      + kv('Phone (Google)', p.gph ? phoneHtml(p.gph)+' '+copyBtn(p.gph) : '', true)
       + kv('Listed in', esc(p.ls))
       + '</dl>'
       + (p.sm ? '<p>'+esc(p.sm)+'</p>' : '')
@@ -771,7 +791,7 @@ header.top .links .btn{padding:6px 12px}
     else {
       document.getElementById('footSum').innerHTML = '<b>'+esc(C.unpinnedTitle || 'Contacts and places without a map location')+' ('+U.length+')</b>';
       document.getElementById('unpinned').innerHTML = U.map(function(u){
-        return '<li>'+(u.e ? '<i>'+esc(u.e)+'</i> ' : '')+'<b>'+esc(u.n)+'</b> ('+esc(u.s)+')'+(u.ph ? ', <span style="font-family:var(--mono)">'+esc(u.ph)+'</span>' : '')+(u.no ? '. '+esc(u.no) : '')+'</li>'; }).join('');
+        return '<li>'+(u.e ? '<i>'+esc(u.e)+'</i> ' : '')+'<b>'+esc(u.n)+'</b> ('+esc(u.s)+')'+(u.ph ? ', <span style="font-family:var(--mono)">'+phoneHtml(u.ph)+'</span>' : '')+(u.no ? '. '+esc(u.no) : '')+'</li>'; }).join('');
     }
     document.getElementById('srcNote').textContent = C.sourceNote || 'Details were checked against Google Maps listings in October 2026; ratings and hours change, so confirm before you go. Street map © OpenStreetMap contributors.';
   })();
