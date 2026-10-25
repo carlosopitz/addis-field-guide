@@ -7,7 +7,7 @@
 <title>The Addis Field Guide Map</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
 <style>
-/* Layout: a two-pane field guide. Left, a filterable index with a detail card; right, a street map of Addis
+/* Layout: a two-pane field guide. Left, a filterable index; place details open in a card on the map; right, a street map of Addis
    drawn on the page from OpenStreetMap data (roads, rivers, parks, neighbourhood and street names), with the
    places pinned on top. Phone: map first, index below. */
 :root{
@@ -97,7 +97,20 @@ header.top .links .btn{padding:6px 12px}
 .group{padding:10px 14px 4px;font-family:var(--display);font-weight:700;font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);position:sticky;top:0;background:var(--panel);z-index:1}
 .group .gm{font-family:var(--emoji);letter-spacing:0;text-transform:none;margin-right:6px}
 
-.detail{flex:0 0 auto;border-top:1px solid var(--line);padding:12px 14px 14px;max-height:52%;overflow:auto;display:grid;gap:8px;background:var(--panel)}
+.detail{display:grid;gap:8px;padding:12px 14px 14px}
+/* place card: floats next to the pin on wide screens, docks along the bottom of the map on phones */
+.mapwrap .card{position:absolute;left:10px;right:10px;bottom:10px;z-index:1001;max-height:58%;overflow:auto;overscroll-behavior:contain;background:var(--panel);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow)}
+.mapwrap .card[hidden]{display:none}
+.legend[hidden]{display:none}
+.xbtn{margin-left:auto;border:0;background:transparent;color:var(--muted);width:28px;height:28px;border-radius:50%;cursor:pointer;font-size:20px;line-height:1;display:grid;place-items:center;flex:none}
+.xbtn:hover{background:var(--bg);color:var(--ink)}
+.leaflet-popup{position:absolute;text-align:left;margin-bottom:14px}
+.leaflet-popup-content-wrapper{background:var(--panel);color:var(--ink);border:1px solid var(--line);border-radius:14px;box-shadow:0 10px 32px rgba(23,32,42,.22);overflow:hidden}
+.leaflet-popup-content{margin:0;font-size:13px;line-height:1.45;overflow:auto;overscroll-behavior:contain}
+.leaflet-popup-tip-container{width:30px;height:15px;position:absolute;left:50%;margin-left:-15px;margin-top:-1px;overflow:hidden;pointer-events:none}
+.leaflet-popup-tip{width:14px;height:14px;margin:-8px auto 0;background:var(--panel);border:1px solid var(--line);transform:rotate(45deg)}
+.leaflet-fade-anim .leaflet-popup{opacity:0;transition:opacity .15s linear}
+.leaflet-fade-anim .leaflet-map-pane .leaflet-popup{opacity:1}
 .detail h2{font-family:var(--display);font-weight:700;font-size:18px;margin:0;line-height:1.2;text-wrap:balance}
 .detail h2 .em{font-family:var(--emoji);margin-right:6px}
 .detail .eyebrow{display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:12px;color:var(--muted)}
@@ -115,7 +128,6 @@ header.top .links .btn{padding:6px 12px}
 .btn{display:inline-flex;align-items:center;gap:6px;border-radius:8px;padding:7px 12px;font-size:13px;font-weight:600;text-decoration:none;border:1px solid var(--line);background:transparent;cursor:pointer;color:var(--ink)}
 .btn.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
 .btn.small{padding:3px 8px;font-size:11.5px;font-weight:500}
-.detail .close{margin-left:auto}
 .empty{color:var(--muted);font-size:13px;padding:14px}
 
 .mapwrap{position:relative;min-height:0;min-width:0;border:1px solid var(--line);border-radius:14px;overflow:hidden;background:var(--m-land)}
@@ -205,7 +217,6 @@ header.top .links .btn{padding:6px 12px}
   .mapwrap{height:62vh;order:0}
   .panel{order:1;max-height:none}
   .list{max-height:52vh}
-  .detail{max-height:none}
   .legend .grid{grid-template-columns:1fr}
   .legend{left:auto;right:10px;top:10px;bottom:auto;max-width:min(240px,calc(100% - 70px))}
   .status{right:auto;left:56px;top:10px}
@@ -249,13 +260,13 @@ header.top .links .btn{padding:6px 12px}
         </div>
       </div>
       <div class="list" id="list" role="listbox" aria-label="Places"></div>
-      <div class="detail" id="detail" hidden></div>
     </section>
 
     <section class="mapwrap" aria-label="Map">
       <div id="map" role="application" aria-label="Street map of Addis Ababa with places pinned"></div>
       <div class="status" id="bmStatus">Loading…</div>
       <div class="legend" id="legend"></div>
+      <div class="card" id="card" role="dialog" aria-label="Place details" hidden></div>
     </section>
   </div>
 
@@ -632,19 +643,20 @@ header.top .links .btn{padding:6px 12px}
     document.getElementById('countLine').textContent = shown.length + ' of ' + P.length + ' shown';
   }
 
-  // ================= detail =================
-  var detail = document.getElementById('detail');
+  // ================= place card =================
+  var card = document.getElementById('card'), legendEl = document.getElementById('legend'), popup = null;
+  var docked = window.matchMedia('(max-width:860px)');
   function kv(dt, dd, mono){ return dd ? '<dt>'+dt+'</dt><dd'+(mono?' class="mono"':'')+'>'+dd+'</dd>' : ''; }
   function copyBtn(text){ return '<button class="btn small" type="button" data-copy="'+esc(text)+'">Copy</button>'; }
-  function showDetail(p){
+  function cardHtml(p){
     var g = GK[p.g];
     var stars = typeof p.r==='number' ? '<span class="mono">'+p.r.toFixed(1)+'</span> on Google from '+esc(p.rc)+' reviews'+(p.p?' · '+esc(p.p):'') : 'No Google rating';
-    detail.innerHTML =
-      '<div class="eyebrow"><span style="color:var(--g-'+p.g+');font-weight:600">'+esc(g.label)+'</span><span>·</span><span>'+esc(p.s)+'</span>'
-      + '<span class="badge '+(p.approx?'part':'ok')+'">'+(p.approx ? (p.st==='Unverified' ? 'Unconfirmed location' : 'Approximate location') : 'Exact location')+'</span>'
-      + (p.src ? '<span class="badge src">'+esc(srcLabel(p.src))+'</span>' : '')
-      + '<button class="btn small close" type="button" id="closeDetail" aria-label="Close details">Close</button></div>'
+    return '<div class="detail">'
+      + '<div class="eyebrow"><span style="color:var(--g-'+p.g+');font-weight:600">'+esc(g.label)+'</span><span>·</span><span>'+esc(p.s)+'</span>'
+      + '<button class="xbtn" type="button" data-close="1" aria-label="Close details">×</button></div>'
       + '<h2>'+(EMOJI ? '<span class="em">'+esc(p.e)+'</span>' : '')+esc(p.n)+'</h2>'
+      + '<div class="eyebrow"><span class="badge '+(p.approx?'part':'ok')+'">'+(p.approx ? (p.st==='Unverified' ? 'Unconfirmed location' : 'Approximate location') : 'Exact location')+'</span>'
+      + (p.src ? '<span class="badge src">'+esc(srcLabel(p.src))+'</span>' : '') + '</div>'
       + (p.k ? '<p><i>'+esc(C.knownLabel || 'Known for')+':</i> '+esc(p.k)+'</p>' : '')
       + '<p>'+stars+'</p>'
       + '<dl class="kv">'
@@ -659,26 +671,57 @@ header.top .links .btn{padding:6px 12px}
       + (p.rv ? '<p class="rv"><b>Reviews:</b> '+esc(p.rv)+'</p>' : '')
       + (p.no ? '<p class="rv"><b>Note:</b> '+esc(p.no)+'</p>' : '')
       + '<div class="actions"><a class="btn primary" href="'+esc(p.u)+'" target="_blank" rel="noopener">Open in Google Maps</a>'
-      + '<span class="mono" style="font-size:11.5px;color:var(--muted)">'+p.la.toFixed(5)+', '+p.ln.toFixed(5)+'</span></div>';
-    detail.hidden = false;
+      + '<span class="mono" style="font-size:11.5px;color:var(--muted)">'+p.la.toFixed(5)+', '+p.ln.toFixed(5)+'</span></div>'
+      + '</div>';
   }
-  function select(i, fly){
-    state.sel = i; var p = P[i];
-    render(); showDetail(p);
-    if (fly !== false) map.flyTo([p.la,p.ln], Math.max(map.getZoom(), 16), {duration:.6});
-    markers[i].openTooltip();
-    var it = listEl.querySelector('.item.active'); if (it && fly === false) it.scrollIntoView({block:'nearest'});
-    if (window.matchMedia('(max-width:860px)').matches && fly !== false) document.getElementById('map').scrollIntoView({behavior:'smooth', block:'start'});
-  }
-  detail.addEventListener('click', function(e){
+  function onCardClick(e){
     var b = e.target.closest('button'); if (!b) return;
-    if (b.id === 'closeDetail') { state.sel = null; detail.hidden = true; render(); return; }
+    if (b.dataset.close) { closeCard(); return; }
     if (b.dataset.copy) {
       var t = b.dataset.copy;
       (navigator.clipboard && navigator.clipboard.writeText ? navigator.clipboard.writeText(t) : Promise.reject()).then(function(){ b.textContent='Copied'; setTimeout(function(){ b.textContent='Copy'; }, 1200); })
         .catch(function(){ var r=document.createRange(); r.selectNodeContents(b.previousSibling||b.parentNode); var s=window.getSelection(); s.removeAllRanges(); s.addRange(r); });
     }
-  });
+  }
+  card.addEventListener('click', onCardClick);
+  function showCard(p){
+    if (state.sel !== p.i) return;
+    if (docked.matches) {
+      if (popup) { var old = popup; popup = null; map.closePopup(old); }
+      card.innerHTML = cardHtml(p); card.hidden = false; card.scrollTop = 0; legendEl.hidden = true;
+      // keep the pin visible in the strip of map above the card
+      var free = map.getSize().y - card.offsetHeight - 10, pt = map.latLngToContainerPoint([p.la,p.ln]);
+      if (pt.y > free - 30 || pt.y < 20) map.panBy([0, pt.y - free/2], {animate:true});
+      return;
+    }
+    card.hidden = true; legendEl.hidden = false;
+    var mh = map.getSize().y;
+    popup = L.popup({maxWidth:380, minWidth:300, maxHeight:Math.max(220, Math.round(mh*0.72)), closeButton:false, autoPan:true,
+      autoPanPadding:[24,24], offset:[p.dx||0, (p.dy||0) - (EMOJI ? 20 : 11)]})
+      .setLatLng([p.la,p.ln]).setContent(cardHtml(p));
+    popup._idx = p.i;
+    popup.openOn(map);
+    var el = popup.getElement(); if (el) el.addEventListener('click', onCardClick);
+    markers[p.i].closeTooltip();
+  }
+  function closeCard(){
+    state.sel = null;
+    if (popup) { var old = popup; popup = null; map.closePopup(old); }
+    card.hidden = true; legendEl.hidden = false; render();
+  }
+  map.on('popupclose', function(e){ if (popup && e.popup === popup) { popup = null; if (state.sel === e.popup._idx) { state.sel = null; render(); } } });
+  document.addEventListener('keydown', function(e){ if (e.key === 'Escape' && state.sel != null) closeCard(); });
+  function select(i, fly){
+    state.sel = i; var p = P[i];
+    render();
+    if (fly !== false) {
+      var done = false; var open = function(){ if (!done) { done = true; showCard(p); } };
+      map.once('moveend', open); setTimeout(open, 900);
+      map.flyTo([p.la,p.ln], Math.max(map.getZoom(), 16), {duration:.6});
+    } else showCard(p);
+    var it = listEl.querySelector('.item.active'); if (it && fly === false) it.scrollIntoView({block:'nearest'});
+    if (docked.matches && fly !== false) document.getElementById('map').scrollIntoView({behavior:'smooth', block:'start'});
+  }
   listEl.addEventListener('click', function(e){ var b = e.target.closest('.item'); if (b) select(+b.dataset.i, true); });
 
   // ================= controls =================
