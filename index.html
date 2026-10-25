@@ -719,7 +719,13 @@ header.top .links .btn{padding:6px 12px}
       map.once('moveend', open); setTimeout(open, 900);
       map.flyTo([p.la,p.ln], Math.max(map.getZoom(), 16), {duration:.6});
     } else showCard(p);
-    var it = listEl.querySelector('.item.active'); if (it && fly === false) it.scrollIntoView({block:'nearest'});
+    // picked on the map: scroll only inside the list box, never the page (on phones the list sits below the map)
+    if (fly === false) {
+      var it = listEl.querySelector('.item.active');
+      if (it) { var lr = listEl.getBoundingClientRect(), ir = it.getBoundingClientRect();
+        if (ir.top < lr.top + 34) listEl.scrollTop += ir.top - lr.top - 40;
+        else if (ir.bottom > lr.bottom) listEl.scrollTop += ir.bottom - lr.bottom + 8; }
+    }
     if (docked.matches && fly !== false) document.getElementById('map').scrollIntoView({behavior:'smooth', block:'start'});
   }
   listEl.addEventListener('click', function(e){ var b = e.target.closest('.item'); if (b) select(+b.dataset.i, true); });
