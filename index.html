@@ -349,6 +349,7 @@ a.tel{white-space:nowrap;text-decoration:underline;text-underline-offset:2px;tex
         suggestText: S['Suggest button text'] || 'Suggest a place', suggestUrl: S['Suggest form link'] || '',
         searchPlaceholder: S['Search box hint'] || 'Search names, food, areas, tips', allSourcesLabel: S['All sources label'] || 'All sources',
         exactOnlyLabel: S['Exact only label'] || 'Show exact locations only', unpinnedTitle: S['Not on map title'] || 'Contacts and places without a map location',
+        sourceNote: S['Footer note'] || '',
         srcLabels: srcLabels, groups: groups, subLabel: 'All types', knownLabel: 'Known for / tips', phoneLabel: 'Phone'};
       return {C:C, P:P, U:U};
     });
@@ -793,7 +794,7 @@ a.tel{white-space:nowrap;text-decoration:underline;text-underline-offset:2px;tex
       document.getElementById('unpinned').innerHTML = U.map(function(u){
         return '<li>'+(u.e ? '<i>'+esc(u.e)+'</i> ' : '')+'<b>'+esc(u.n)+'</b> ('+esc(u.s)+')'+(u.ph ? ', <span style="font-family:var(--mono)">'+phoneHtml(u.ph)+'</span>' : '')+(u.no ? '. '+esc(u.no) : '')+'</li>'; }).join('');
     }
-    document.getElementById('srcNote').textContent = C.sourceNote || 'Details were checked against Google Maps listings in October 2026; ratings and hours change, so confirm before you go. Street map © OpenStreetMap contributors.';
+    document.getElementById('srcNote').textContent = C.sourceNote || 'Details were checked against Google Maps listings in October 2026; ratings and hours change, so confirm before you go. Street map © OpenStreetMap contributors. Built with Leaflet, Google Sheets, GitHub Pages and Claude.';
   })();
 
   var mq = window.matchMedia('(prefers-color-scheme: dark)');
